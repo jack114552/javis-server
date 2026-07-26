@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Javis - 个人 AI 助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: #16213e;
+            padding: 12px 20px;
+            border-bottom: 1px solid #0f3460;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .header .status { font-size: 12px; color: #8f8f8f; }
+        .header .status.online { color: #4ade80; }
+        .chat {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .msg {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .msg.user {
+            background: #0f3460;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .msg.assistant {
+            background: #16213e;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .msg .tool-info {
+            font-size: 12px;
+            color: #8f8f8f;
+            margin-top: 6px;
+            border-top: 1px solid #333;
+            padding-top: 6px;
+        }
+        .input-area {
+            display: flex;
+            gap: 8px;
+            padding: 12px 20px;
+            background: #16213e;
+            border-top: 1px solid #0f3460;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-size: 14px;
+            outline: none;
+        }
+        .input-area input:focus { border-color: #4a9eff; }
+        .input-area button {
+            padding: 10px 20px;
+            background: #4a9eff;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .input-area button:hover { background: #3a8eef; }
+        .input-area button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .typing { color: #8f8f8f; font-size: 13px; padding: 4px 14px; }
+        .todo-panel {
+            background: #16213e;
+            border-top: 1px solid #0f3460;
+            padding: 4px 20px 12px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s;
+        }
+        .todo-panel.open { max-height: 300px; overflow-y: auto; }
+        .todo-panel .todo-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            font-size: 13px;
+            border-bottom: 1px solid #0f3460;
+        }
+        .todo-panel .todo-item:last-child { border: none; }
+        .todo-panel .todo-status {
+            font-size: 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .todo-panel .todo-title { flex: 1; }
+        .todo-panel .todo-deadline { color: #f59e0b; font-size: 12px; }
+        .todo-badge {
+            cursor: pointer;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            background: #0f3460;
+        }
+        .todo-badge:hover { background: #1a3a6e; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div style="display:flex;align-items:center;gap:10px;">
+        <h1>🔧 Javis</h1>
+        <span class="todo-badge" id="todoBadge" onclick="toggleTodos()">待办 0</span>
+    </div>
+    <span class="status" id="status">连接中...</span>
+</div>
+
+<div class="chat" id="chat"></div>
+
+<div class="todo-panel" id="todoPanel">
+    <div style="font-size:13px;color:#8f8f8f;padding:4px 0;">待办事项</div>
+    <div id="todoList"></div>
+</div>
+
+<div class="input-area">
+    <input type="text" id="input" placeholder="跟 Javis 说点什么..." onkeydown="if(event.key==='Enter') send()" />
+    <button id="sendBtn" onclick="send()">发送</button>
+</div>
+
+<script>
+let ws = null;
+let sessionId = 'web_' + Date.now();
+
+function connect() {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${protocol}//${location.host}/api/ws?session_id=${sessionId}`;
+
+    ws = new WebSocket(url);
+    ws.onopen = () => {
+        document.getElementById('status').textContent = '🟢 在线';
+        document.getElementById('status').className = 'status online';
+        document.getElementById('sendBtn').disabled = false;
+    };
+    ws.onclose = () => {
+        document.getElementById('status').textContent = '🔴 已断开';
+        document.getElementById('status').className = 'status';
+        document.getElementById('sendBtn').disabled = true;
+        setTimeout(connect, 3000);
+    };
+    ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === 'chat') {
+            addMessage('assistant', data.content, data.tool_calls);
+        } else if (data.type === 'reminder' || data.type === 'due_soon') {
+            addMessage('assistant', '🔔 ' + data.text);
+        }
+        loadTodos();
+    };
+}
+
+function addMessage(role, content, toolCalls) {
+    const chat = document.getElementById('chat');
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.textContent = content;
+
+    if (toolCalls && toolCalls.length > 0) {
+        const info = document.createElement('div');
+        info.className = 'tool-info';
+        const names = toolCalls.map(t => t.name).join(' → ');
+        info.textContent = '⚡ ' + names;
+        div.appendChild(info);
+    }
+
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+}
+
+function send() {
+    const input = document.getElementById('input');
+    const text = input.value.trim();
+    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    addMessage('user', text);
+    input.value = '';
+    ws.send(JSON.stringify({ message: text }));
+}
+
+async function loadTodos() {
+    try {
+        const res = await fetch('/api/todos?status=pending');
+        const data = await res.json();
+        const count = data.count || 0;
+        document.getElementById('todoBadge').textContent = `待办 ${count}`;
+
+        const list = document.getElementById('todoList');
+        list.innerHTML = '';
+        for (const todo of data.todos) {
+            const item = document.createElement('div');
+            item.className = 'todo-item';
+            const deadline = todo.deadline_text || (todo.deadline_utc ? todo.deadline_utc.slice(0, 10) : '');
+            item.innerHTML = `
+                <span class="todo-status" onclick="completeTodo(${todo.id})">⬜</span>
+                <span class="todo-title">${todo.title}</span>
+                ${deadline ? `<span class="todo-deadline">${deadline}</span>` : ''}
+            `;
+            list.appendChild(item);
+        }
+    } catch (e) {}
+}
+
+async function completeTodo(id) {
+    await fetch(`/api/todos/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'done' })
+    });
+    loadTodos();
+}
+
+function toggleTodos() {
+    document.getElementById('todoPanel').classList.toggle('open');
+}
+
+connect();
+loadTodos();
+// 每 30 秒刷新待办
+setInterval(loadTodos, 30000);
+</script>
+
+</body>
+</html>
