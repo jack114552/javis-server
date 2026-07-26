@@ -1,0 +1,26 @@
+# Javis - Python Backend
+# 核心框架
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+
+# 配置
+pydantic-settings==2.4.0
+python-dotenv==1.0.0
+
+# AI 引擎
+openai>=1.0.0
+
+# 数据库
+aiosqlite==0.20.0
+
+# WebSocket
+websockets>=12.0
+
+# HTTP 客户端（工具用）
+httpx==0.27.0
+
+# CORS
+# 包含在 fastapi 中
+
+# 日志
+# 标准库 logging
