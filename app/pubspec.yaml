@@ -1,0 +1,46 @@
+name: javis
+description: Javis - Personal AI Assistant
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  
+  # 网络
+  web_socket_channel: ^2.4.0
+  http: ^1.1.0
+  
+  # 状态管理
+  provider: ^6.1.1
+  
+  # UI
+  flutter_slidable: ^3.0.1
+  shimmer: ^3.0.0
+  lottie: ^2.7.0
+  
+  # 本地存储
+  shared_preferences: ^2.2.2
+  
+  # 本地通知
+  flutter_local_notifications: ^18.0.1
+  
+  # 工具
+  intl: ^0.19.0
+  flutter_animate: ^4.3.0
+  url_launcher: ^6.2.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/javis_avatar.svg
